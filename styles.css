@@ -1,0 +1,19 @@
+/* Daily Task Drain */
+
+.daily-task-drain-status {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
+/* The drain section in the daily note is kept visually separate from the rest
+   of the note so finished work can be skimmed. */
+.daily-task-drain-heading {
+	color: var(--text-accent);
+}
+
+.daily-task-drain-settings textarea {
+	width: 100%;
+	min-height: 8em;
+	font-family: var(--font-monospace);
+	resize: vertical;
+}

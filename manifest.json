@@ -1,0 +1,9 @@
+{
+  "id": "daily-task-drain",
+  "name": "Daily Task Drain",
+  "version": "0.1.0",
+  "minAppVersion": "1.5.0",
+  "description": "Automatically moves completed tasks from every note in your vault into today's daily note, but only when the task and all of its sub-tasks are done.",
+  "author": "steimerbyte",
+  "isDesktopOnly": false
+}
