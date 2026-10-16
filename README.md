@@ -99,8 +99,20 @@ of a folder `Journal` plus a format of `YYYY/MM/YYYY-MM-DD`, a vault that has
 never seen the current month has no `Journal/2026/10` yet. The plugin builds the
 whole parent chain of the resolved path, parents before children, and only
 creates what is actually missing — so an existing `Journal` is never touched
-again. If the core plugin cannot be reached, the plugin falls back to the same
-path and creates the note from the configured template.
+again.
+
+The plugin resolves an **existing** daily note through the core plugin's own
+lookup, but creates a **missing** one itself. It deliberately does not call
+`createDailyNote()` from `obsidian-daily-notes-interface`: that function calls
+`vault.createFolder()` on the whole parent chain guarded only by a truthiness
+check, so it re-creates folders that already exist and Obsidian rejects the call
+with *Folder already exists*.
+
+A note created by this plugin carries the same template substitutions the core
+plugin performs — `{{date}}`, `{{title}}`, `{{time}}`, `{{date+1d}}`,
+`{{date-2w:MMMM}}`, `{{yesterday}}`, `{{tomorrow}}` — so the result is
+indistinguishable from a note Obsidian created. Unknown placeholders, such as
+Templater or Dataview syntax, are left untouched.
 
 Inside the daily note, tasks are appended at the end of a configurable heading (**`## Erledigt`** by default):
 
@@ -163,6 +175,7 @@ src/main.ts            plugin class, triggers, commands, settings tab
 src/taskParser.ts      pure task parsing, block detection, the gate, code-fence mask
 src/canvasParser.ts    canvas JSON: finds tasks in text nodes, applies the same gate
 src/dailyNotePath.ts   parent-folder arithmetic for the daily note path
+src/template.ts        daily-note template placeholders ({{date}}, {{title}}, …)
 src/drain.ts           move logic, atomic writes, undo, daily-note resolution
 src/exclusions.ts      path matching for source and excluded folders
 src/types.d.ts         declarations for Obsidian APIs missing from obsidian.d.ts

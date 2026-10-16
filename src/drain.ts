@@ -2,7 +2,6 @@ import { App, Notice, TAbstractFile, TFile, TFolder, moment } from "obsidian";
 import type { Moment } from "moment";
 import {
 	appHasDailyNotesPluginLoaded,
-	createDailyNote,
 	getAllDailyNotes,
 	getDailyNote,
 	getDailyNoteSettings,
@@ -10,6 +9,7 @@ import {
 
 import { isCanvasPath, splitCanvas, stringifyCanvas } from "./canvasParser";
 import { missingFolders, parentOf } from "./dailyNotePath";
+import { renderTemplate } from "./template";
 import {
 	GateOptions,
 	insertIntoSection,
@@ -115,12 +115,18 @@ export class DrainEngine {
 			try {
 				const known = getDailyNote(date, getAllDailyNotes());
 				if (known instanceof TFile) return known;
-
-				const created = await createDailyNote(date);
-				if (created instanceof TFile) return created;
 			} catch (error) {
-				console.warn("[Daily Task Drain] daily-notes interface failed, using manual path", error);
+				// getAllDailyNotes() throws when the daily-notes folder is missing.
+				// That is not a problem here: the folders were just created above.
+				console.warn("[Daily Task Drain] daily-notes lookup failed, creating the note manually", error);
 			}
+
+			// createDailyNote() is deliberately NOT used. Its internal
+			// ensureFolderExists() calls vault.createFolder() on the whole parent
+			// chain with only a truthiness check, so it throws "Folder already
+			// exists" as soon as one of those folders exists — which is the normal
+			// case. The note is therefore created here, through the same code path
+			// as the fallback, so the template is applied exactly once.
 		}
 
 		return this.createFromTemplate(path, settings);
@@ -364,12 +370,12 @@ export class DrainEngine {
 	/** Last resort: build the daily note from the configured template. */
 	private async createFromTemplate(path: string, settings: DailyNoteSettings): Promise<TFile> {
 		const template = this.app.vault.getAbstractFileByPath(normalizeVaultPath(settings.template));
-		const content =
+		const raw =
 			template instanceof TFile
 				? await this.app.vault.read(template)
-				: `# ${today().format(DEFAULT_DAILY_NOTE_FORMAT)}\n`;
+				: `# ${today().format(settings.format)}\n`;
 
-		const created = await this.app.vault.create(path, content);
+		const created = await this.app.vault.create(path, renderTemplate(raw, today(), settings.format));
 		new Notice(`Daily Task Drain: created today's daily note at ${path}.`);
 		return created;
 	}
