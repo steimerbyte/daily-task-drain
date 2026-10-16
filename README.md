@@ -29,13 +29,37 @@ npm test        # runs the unit tests
 
 ## What it does
 
-- Watches every Markdown file in the vault via Obsidian's `modify` event.
+- Watches every Markdown **and canvas** file in the vault via Obsidian's `modify` event.
 - Collects all task blocks that satisfy the gate described below.
 - Appends them to a heading inside today's daily note.
 - Removes them from the note they came from.
 - Writes **destination first, source second**, so a failed write can never make a task disappear.
 
 A whole parent block moves as one piece, sub-tasks included, so nothing is ever split off from its parent.
+
+---
+
+## Canvas files
+
+Obsidian canvas files are JSON, not Markdown, so they need their own path. The
+plugin applies the same gate to the Markdown inside every `text` node of a
+`.canvas` file, so a task on a canvas moves exactly like a task in a note.
+
+Everything else about the canvas is preserved. Only the `text` field of a node
+changes; `id`, position, `width`, `height`, `color`, `styleAttributes` and any
+plugin-specific keys such as `vn` are written back unchanged, and `edges` and
+`metadata` are never touched. A file that is not valid canvas JSON is skipped
+rather than rewritten, so a broken file cannot be destroyed.
+
+Two details worth knowing:
+
+- A node that loses all of its content keeps an empty text field. Obsidian draws
+  that as an empty box; delete it yourself if you do not want it. The plugin
+  never deletes a node, because an edge elsewhere in the canvas may point at it.
+- Canvas text is a *fragment* of Markdown, so a node may start in the middle of a
+  list. That is exactly why the drain entry point for the current file is called
+  "Drain completed tasks from the current file" rather than "from the current
+  note".
 
 ---
 
@@ -61,6 +85,7 @@ Details that matter in real vaults:
 | Tasks in ``` / `~~~` code blocks | never moved, they are documentation |
 | Tasks in YAML frontmatter | never moved |
 | Headings and `---` breaks | end a task block |
+| Canvas `text` nodes | drained with the same gate, node is otherwise left intact |
 
 ---
 
@@ -91,7 +116,7 @@ The record is valid for **120 000 ms (two minutes)** by default; afterwards the 
 
 | Command | What it does |
 | --- | --- |
-| Drain completed tasks from the current note | Drains the note that is open in the workspace. |
+| Drain completed tasks from the current file | Drains the note or canvas open in the workspace. |
 | Drain completed tasks from the whole vault | Walks every eligible Markdown file once. |
 | Undo the last drain | Restores both files of the last drain inside the undo window. |
 
@@ -130,6 +155,7 @@ manifest.json          plugin manifest
 main.js                build output (generated)
 src/main.ts            plugin class, triggers, commands, settings tab
 src/taskParser.ts      pure task parsing, block detection, the gate, code-fence mask
+src/canvasParser.ts    canvas JSON: finds tasks in text nodes, applies the same gate
 src/drain.ts           move logic, atomic writes, undo, daily-note resolution
 src/exclusions.ts      path matching for source and excluded folders
 src/types.d.ts         declarations for Obsidian APIs missing from obsidian.d.ts

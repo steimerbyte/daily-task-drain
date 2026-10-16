@@ -8,6 +8,7 @@ import {
 	getDailyNoteSettings,
 } from "obsidian-daily-notes-interface";
 
+import { isCanvasPath, splitCanvas, stringifyCanvas } from "./canvasParser";
 import {
 	GateOptions,
 	insertIntoSection,
@@ -119,16 +120,71 @@ export class DrainEngine {
 	}
 
 	/**
-	 * True when a file may be drained: markdown, inside the source folder, not
-	 * excluded, and not the daily note itself.
+	 * True when a file may be drained: markdown or canvas, inside the source
+	 * folder, not excluded, and not the daily note itself.
 	 */
 	isEligible(file: TFile, dailyNotePath: string | null): boolean {
 		const settings = this.getSettings();
-		if (!isProcessableFile(file.path)) return false;
+		// Canvas files carry Markdown inside their text nodes and are drained
+		// through the same gate, so they belong to the same candidate set.
+		if (!isProcessableFile(file.path) && !isCanvasPath(file.path)) return false;
 		if (dailyNotePath !== null && isSameFile(file.path, dailyNotePath)) return false;
 		if (!isInSourceFolder(file.path, settings.sourceFolder)) return false;
 		if (isPathExcluded(file.path, settings.excludedFolders)) return false;
 		return true;
+	}
+
+	/**
+	 * Moves every qualifying block of a canvas node set into the daily note.
+	 *
+	 * A canvas is JSON rather than Markdown, so it takes a different path than
+	 * `drainFile`: the gate runs per text node, and the source is written back
+	 * as JSON. Both paths share the destination-first ordering and the undo
+	 * record, so a canvas drain is undone the same way a note drain is.
+	 */
+	async drainCanvasFile(file: TFile): Promise<DrainOutcome> {
+		const settings = this.getSettings();
+		const original = await this.app.vault.read(file);
+		const split = splitCanvas(original, settings);
+
+		if (split.completed.length === 0) return { file, movedCount: 0 };
+
+		const dailyNote = await this.resolveDailyNote();
+		if (isSameFile(dailyNote.path, file.path)) return { file, movedCount: 0 };
+
+		const targetBefore = await this.app.vault.read(dailyNote);
+		const targetAfter = insertIntoSection(
+			targetBefore,
+			split.completed,
+			settings.targetHeading,
+			settings.headingLevel,
+		);
+
+		const recorded: UndoEntry[] = [{ path: file.path, oldContent: original }];
+
+		if (targetAfter !== targetBefore) {
+			await this.app.vault.process(dailyNote, () => targetAfter);
+			recorded.push({ path: dailyNote.path, oldContent: targetBefore });
+		}
+
+		try {
+			await this.writeSource(file, original, stringifyCanvas(split.doc));
+		} catch (error) {
+			await this.rollback(recorded);
+			throw error;
+		}
+
+		this.undoRecord = { entries: recorded, timestamp: Date.now() };
+		return { file, movedCount: split.changedNodes };
+	}
+
+	/**
+	 * Dispatches to the markdown or the canvas path depending on the extension.
+	 * Both return the same outcome shape, so callers stay free of that branch.
+	 */
+	async drainAnyFile(file: TFile): Promise<DrainOutcome> {
+		if (isCanvasPath(file.path)) return this.drainCanvasFile(file);
+		return this.drainFile(file);
 	}
 
 	/**
@@ -175,13 +231,16 @@ export class DrainEngine {
 		return { file, movedCount: split.blocks.length };
 	}
 
-	/** Drains every eligible markdown note in the vault, one file at a time. */
+	/** Drains every eligible note and canvas in the vault, one file at a time. */
 	async drainVault(): Promise<DrainOutcome[]> {
 		const dailyNotePath = this.peekDailyNotePath();
-		const candidates = this.app.vault.getMarkdownFiles().filter((file) => this.isEligible(file, dailyNotePath));
+		const candidates = this.app.vault
+			.getFiles()
+			.filter((file): file is TFile => file instanceof TFile)
+			.filter((file) => this.isEligible(file, dailyNotePath));
 
 		const outcomes: DrainOutcome[] = [];
-		for (const file of candidates) outcomes.push(await this.drainFile(file));
+		for (const file of candidates) outcomes.push(await this.drainAnyFile(file));
 
 		return outcomes;
 	}

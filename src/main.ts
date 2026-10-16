@@ -44,14 +44,14 @@ export default class DailyTaskDrainPlugin extends Plugin {
 				void this.runDrain(async () => {
 					if (!(changed instanceof TFile)) return [];
 					if (!this.engine.isEligible(changed, this.engine.peekDailyNotePath())) return [];
-					return [await this.engine.drainFile(changed)];
+					return [await this.engine.drainAnyFile(changed)];
 				});
 			}),
 		);
 
 		this.addCommand({
 			id: "drain-completed-tasks",
-			name: "Drain completed tasks from the current note",
+			name: "Drain completed tasks from the current file",
 			callback: () => {
 				void this.runDrain(async () => {
 					const active = this.app.workspace.getActiveFile();
@@ -59,7 +59,7 @@ export default class DailyTaskDrainPlugin extends Plugin {
 						new Notice("Daily Task Drain: no note is open.");
 						return [];
 					}
-					return [await this.engine.drainFile(active)];
+					return [await this.engine.drainAnyFile(active)];
 				});
 			},
 		});
