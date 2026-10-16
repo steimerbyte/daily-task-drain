@@ -9,6 +9,7 @@ import {
 } from "obsidian-daily-notes-interface";
 
 import { isCanvasPath, splitCanvas, stringifyCanvas } from "./canvasParser";
+import { missingFolders, parentOf } from "./dailyNotePath";
 import {
 	GateOptions,
 	insertIntoSection,
@@ -97,9 +98,20 @@ export class DrainEngine {
 		const date = today();
 		const settings = this.readDailyNoteSettings();
 		const folder = normalizeVaultPath(settings.folder);
-		const folderExists = folder.length === 0 || this.app.vault.getAbstractFileByPath(folder) instanceof TFolder;
+		const fileName = date.format(settings.format);
+		const path = folder.length === 0 ? fileName : `${folder}/${fileName}`;
 
-		if (folderExists && appHasDailyNotesPluginLoaded()) {
+		const existing = this.app.vault.getAbstractFileByPath(path);
+		if (existing instanceof TFile) return existing;
+
+		// The date format can add sub-folders the core plugin has never seen, e.g.
+		// "Journal/2026/10" for a format of "YYYY/MM/YYYY-MM-DD". Those do not
+		// exist in a vault that has never seen that month, so the parent chain is
+		// created before anything is written. Without this, createDailyNote() and
+		// vault.create() both fail on the missing directory.
+		await this.ensureFolder(parentOf(path));
+
+		if (appHasDailyNotesPluginLoaded()) {
 			try {
 				const known = getDailyNote(date, getAllDailyNotes());
 				if (known instanceof TFile) return known;
@@ -111,11 +123,6 @@ export class DrainEngine {
 			}
 		}
 
-		const path = folder.length === 0 ? date.format(settings.format) : `${folder}/${date.format(settings.format)}`;
-		const existing = this.app.vault.getAbstractFileByPath(path);
-		if (existing instanceof TFile) return existing;
-
-		if (folder.length > 0) await this.ensureFolder(folder);
 		return this.createFromTemplate(path, settings);
 	}
 
@@ -329,16 +336,28 @@ export class DrainEngine {
 	}
 
 	/** Creates a folder and all missing parents, then returns the deepest one. */
+	/**
+	 * Creates every folder of `path` that does not exist yet, parents before
+	 * children so each createFolder() call has its parent in place.
+	 *
+	 * `path` is a file path, not a folder: the daily-note path adds sub-folders
+	 * from the date format, so "Journal" alone is never enough.
+	 */
 	private async ensureFolder(path: string): Promise<void> {
-		const segments = path.split("/");
-		let current = "";
+		const isFolder = (candidate: string): boolean =>
+			this.app.vault.getAbstractFileByPath(candidate) instanceof TFolder;
 
-		for (const segment of segments) {
-			current = current.length === 0 ? segment : `${current}/${segment}`;
-			const existing: TAbstractFile | null = this.app.vault.getAbstractFileByPath(current);
-			if (existing instanceof TFolder) continue;
-			if (existing !== null) throw new Error(`${current} exists but is not a folder.`);
-			await this.app.vault.createFolder(current);
+		const existingPath = this.app.vault.getAbstractFileByPath(parentOf(path));
+		if (existingPath !== null && !(existingPath instanceof TFolder)) {
+			throw new Error(`${parentOf(path)} exists but is not a folder.`);
+		}
+
+		for (const folder of missingFolders(path, isFolder)) {
+			const existing: TAbstractFile | null = this.app.vault.getAbstractFileByPath(folder);
+			if (existing !== null && !(existing instanceof TFolder)) {
+				throw new Error(`${folder} exists but is not a folder.`);
+			}
+			if (existing === null) await this.app.vault.createFolder(folder);
 		}
 	}
 

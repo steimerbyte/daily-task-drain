@@ -94,7 +94,13 @@ Details that matter in real vaults:
 The target daily note is **not** computed by this plugin. It reads the real settings of Obsidian's core *Daily notes* plugin (and of *Periodic notes* when that one is in charge) through
 [`obsidian-daily-notes-interface`](https://github.com/liamcain/obsidian-daily-notes-interface), so a vault configured as `Journal/YYYY/MM/YYYY-MM-DD.md` gets exactly that note.
 
-If the core plugin is disabled or its folder does not exist yet, the plugin falls back to building the same path from those settings and creates the note from the configured template.
+Missing folders are created automatically. With the very common configuration
+of a folder `Journal` plus a format of `YYYY/MM/YYYY-MM-DD`, a vault that has
+never seen the current month has no `Journal/2026/10` yet. The plugin builds the
+whole parent chain of the resolved path, parents before children, and only
+creates what is actually missing — so an existing `Journal` is never touched
+again. If the core plugin cannot be reached, the plugin falls back to the same
+path and creates the note from the configured template.
 
 Inside the daily note, tasks are appended at the end of a configurable heading (**`## Erledigt`** by default):
 
@@ -156,6 +162,7 @@ main.js                build output (generated)
 src/main.ts            plugin class, triggers, commands, settings tab
 src/taskParser.ts      pure task parsing, block detection, the gate, code-fence mask
 src/canvasParser.ts    canvas JSON: finds tasks in text nodes, applies the same gate
+src/dailyNotePath.ts   parent-folder arithmetic for the daily note path
 src/drain.ts           move logic, atomic writes, undo, daily-note resolution
 src/exclusions.ts      path matching for source and excluded folders
 src/types.d.ts         declarations for Obsidian APIs missing from obsidian.d.ts
