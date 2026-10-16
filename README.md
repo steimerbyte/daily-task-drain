@@ -20,8 +20,21 @@ To build the plugin from source:
 ```bash
 npm install
 npm run build   # writes main.js
-npm test        # runs the unit tests
+npm test        # runs the test suite
 ```
+
+The suite has four layers, all of which run in `npm test`:
+
+| Layer | What it covers |
+| --- | --- |
+| Unit | task parsing, the gate, canvas nodes, folder arithmetic, template placeholders |
+| Integration | the whole write path against an in-memory vault |
+| Regression | replays the duplicate-folder bug that reached the console |
+| Vault fixtures | the real files of both vaults, read-only |
+
+The in-memory vault in `tests/harness/fakeVault.ts` is deliberately strict:
+`createFolder` throws *Folder already exists* exactly like Obsidian does, which
+is what lets the suite catch ordering bugs that a permissive fake would hide.
 
 `npm run dev` starts esbuild in watch mode for development.
 
