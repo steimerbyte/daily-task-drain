@@ -1,4 +1,5 @@
 import {
+	cleanVaultPath,
 	isInSourceFolder,
 	isPathExcluded,
 	isSameFile,
@@ -31,6 +32,14 @@ describe("normalizeVaultPath", () => {
 
 	it("lower-cases for case-insensitive comparison", () => {
 		expect(normalizeVaultPath("JOURNAL/2026")).toBe("journal/2026");
+	});
+});
+
+describe("cleanVaultPath", () => {
+	it("keeps the case, because the result addresses a real file", () => {
+		expect(cleanVaultPath("  /Journal/2026/  ")).toBe("Journal/2026");
+		expect(cleanVaultPath("Templates\\journal.md")).toBe("Templates/journal.md");
+		expect(cleanVaultPath("Journal")).toBe("Journal");
 	});
 });
 

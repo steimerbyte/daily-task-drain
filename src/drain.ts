@@ -8,7 +8,7 @@ import {
 } from "obsidian-daily-notes-interface";
 
 import { isCanvasPath, splitCanvas, stringifyCanvas } from "./canvasParser";
-import { missingFolders, parentOf } from "./dailyNotePath";
+import { dailyNoteFileName, missingFolders, parentOf } from "./dailyNotePath";
 import { renderTemplate } from "./template";
 import {
 	GateOptions,
@@ -18,7 +18,7 @@ import {
 	splitLines,
 	tidyContent,
 } from "./taskParser";
-import { isInSourceFolder, isPathExcluded, isSameFile, normalizeVaultPath } from "./exclusions";
+import { cleanVaultPath, isInSourceFolder, isPathExcluded, isSameFile } from "./exclusions";
 
 /** Format used when the vault's daily-note plugin has no format configured. */
 const DEFAULT_DAILY_NOTE_FORMAT = "YYYY-MM-DD";
@@ -97,9 +97,7 @@ export class DrainEngine {
 	async resolveDailyNote(): Promise<TFile> {
 		const date = today();
 		const settings = this.readDailyNoteSettings();
-		const folder = normalizeVaultPath(settings.folder);
-		const fileName = date.format(settings.format);
-		const path = folder.length === 0 ? fileName : `${folder}/${fileName}`;
+		const path = this.dailyNotePath(date, settings);
 
 		const existing = this.app.vault.getAbstractFileByPath(path);
 		if (existing instanceof TFile) return existing;
@@ -109,7 +107,7 @@ export class DrainEngine {
 		// exist in a vault that has never seen that month, so the parent chain is
 		// created before anything is written. Without this, createDailyNote() and
 		// vault.create() both fail on the missing directory.
-		await this.ensureFolder(parentOf(path));
+		await this.ensureFolder(path);
 
 		if (appHasDailyNotesPluginLoaded()) {
 			try {
@@ -302,9 +300,16 @@ export class DrainEngine {
 			// settings-derived path below is still the right answer.
 		}
 
-		const settings = this.readDailyNoteSettings();
-		const folder = normalizeVaultPath(settings.folder);
-		const fileName = today().format(settings.format);
+		return this.dailyNotePath(today(), this.readDailyNoteSettings());
+	}
+
+	/**
+	 * Vault path of the daily note for `date`, built from the core plugin's
+	 * folder and format exactly like the core plugin builds it.
+	 */
+	private dailyNotePath(date: Moment, settings: DailyNoteSettings): string {
+		const folder = cleanVaultPath(settings.folder);
+		const fileName = dailyNoteFileName(date.format(settings.format));
 		return folder.length === 0 ? fileName : `${folder}/${fileName}`;
 	}
 
@@ -341,13 +346,12 @@ export class DrainEngine {
 		};
 	}
 
-	/** Creates a folder and all missing parents, then returns the deepest one. */
 	/**
-	 * Creates every folder of `path` that does not exist yet, parents before
-	 * children so each createFolder() call has its parent in place.
+	 * Creates every folder the daily-note `path` needs, parents before children
+	 * so each createFolder() call has its parent in place.
 	 *
-	 * `path` is a file path, not a folder: the daily-note path adds sub-folders
-	 * from the date format, so "Journal" alone is never enough.
+	 * `path` is the note path, not its parent folder: the date format adds
+	 * sub-folders, so "Journal" alone is never enough.
 	 */
 	private async ensureFolder(path: string): Promise<void> {
 		const isFolder = (candidate: string): boolean =>
@@ -369,7 +373,7 @@ export class DrainEngine {
 
 	/** Last resort: build the daily note from the configured template. */
 	private async createFromTemplate(path: string, settings: DailyNoteSettings): Promise<TFile> {
-		const template = this.app.vault.getAbstractFileByPath(normalizeVaultPath(settings.template));
+		const template = this.app.vault.getAbstractFileByPath(cleanVaultPath(settings.template));
 		const raw =
 			template instanceof TFile
 				? await this.app.vault.read(template)

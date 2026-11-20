@@ -1,4 +1,4 @@
-import { missingFolders, parentOf } from "../src/dailyNotePath";
+import { dailyNoteFileName, missingFolders, parentOf } from "../src/dailyNotePath";
 
 /**
  * Regression tests for the bug where a drain failed with "folder already
@@ -65,5 +65,16 @@ describe("missingFolders", () => {
 		const result = missingFolders(OCTOBER_NOTE, vaultWith(["Journal", "Journal/2026"]));
 		expect(result).not.toContain("Journal");
 		expect(result).toHaveLength(1);
+	});
+});
+describe("dailyNoteFileName", () => {
+	it("ergaenzt .md, wenn der Format-String keins enthaelt", () => {
+		expect(dailyNoteFileName("2026/11/2026-11-20")).toBe("2026/11/2026-11-20.md");
+		expect(dailyNoteFileName("2026-11-20")).toBe("2026-11-20.md");
+	});
+
+	it("laesst ein bereits vorhandenes .md unangetastet", () => {
+		expect(dailyNoteFileName("2026-11-20.md")).toBe("2026-11-20.md");
+		expect(dailyNoteFileName("2026-11-20.MD")).toBe("2026-11-20.MD");
 	});
 });

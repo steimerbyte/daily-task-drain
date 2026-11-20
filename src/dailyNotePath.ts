@@ -40,3 +40,13 @@ export function missingFolders(path: string, exists: (folder: string) => boolean
 
 	return chain;
 }
+/**
+ * File name of a daily note: the formatted date plus `.md`, unless the format
+ * already ends in `.md`. Mirrors `getNotePath()` of
+ * `obsidian-daily-notes-interface`, which the core plugin uses and which this
+ * plugin has to match: `YYYY/MM/YYYY-MM-DD` formats a path without an
+ * extension, and a note created without `.md` is not a note Obsidian reads.
+ */
+export function dailyNoteFileName(formattedDate: string): string {
+	return /\.md$/i.test(formattedDate) ? formattedDate : `${formattedDate}.md`;
+}

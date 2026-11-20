@@ -14,18 +14,29 @@ export function parseFolderList(raw: string): string[] {
 }
 
 /**
- * Normalises a vault path for comparison: backslashes become slashes,
- * surrounding whitespace and leading/trailing slashes are dropped and the
- * result is lower-cased, because Obsidian paths are compared case-insensitively
- * on Windows and macOS.
+ * Cleans a vault path so it can address a real file: backslashes become
+ * slashes, surrounding whitespace and leading/trailing slashes are dropped.
+ * The case is preserved, because a vault on Linux is case-sensitive:
+ * `Journal` and `journal` are two different folders there.
  */
-export function normalizeVaultPath(path: string): string {
+export function cleanVaultPath(path: string): string {
 	return path
 		.trim()
 		.replace(/\\/g, "/")
 		.replace(/^\/+/, "")
-		.replace(/\/+$/, "")
-		.toLowerCase();
+		.replace(/\/+$/, "");
+}
+
+/**
+ * Normalises a vault path for comparison: as {@link cleanVaultPath}, plus
+ * lower-casing, because exclusion and folder matching should not depend on
+ * the case a user typed.
+ *
+ * Never use this to look a file up; lower-casing the path breaks the lookup on
+ * a case-sensitive filesystem.
+ */
+export function normalizeVaultPath(path: string): string {
+	return cleanVaultPath(path).toLowerCase();
 }
 
 /**
